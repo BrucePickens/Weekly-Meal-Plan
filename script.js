@@ -1266,29 +1266,37 @@ img.onerror = () => {
   img.style.display = "none";
   fallback.style.display = "block";
 };
+fallback.onclick = () => {
+  getAttachmentBlob(att.id).then(blob => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+  });
+};
+fallback.style.cursor = "pointer";
+fallback.textContent += " (tap to open)";
 
 wrapper.appendChild(img);
 wrapper.appendChild(fallback);
 
 }
 
-// PDF
+// PDF (iPad-safe)
 else if (att.type === "application/pdf") {
-  const obj = document.createElement("object");
-obj.type = "application/pdf";
+  const iframe = document.createElement("iframe");
 
-getAttachmentBlob(att.id).then(blob => {
-  if (!blob) return;
-  obj.data = URL.createObjectURL(blob);
-});
+  getAttachmentBlob(att.id).then(blob => {
+    if (!blob) return;
+    iframe.src = URL.createObjectURL(blob);
+  });
 
-obj.style.width = "100%";
-obj.style.height = "calc(100vh - 120px)";
-obj.style.border = "1px solid #ccc";
+  iframe.style.width = "100%";
+  iframe.style.height = "calc(100vh - 120px)";
+  iframe.style.border = "1px solid #ccc";
 
-wrapper.appendChild(obj);
-
+  wrapper.appendChild(iframe);
 }
+
 
     // OTHER FILES (Word, etc.)
     else {
@@ -1321,49 +1329,7 @@ wrapper.appendChild(obj);
    INIT
 ========================================================= */
 
-if (importDataBtn && importFileInput) {
-  importDataBtn.onclick = () => importFileInput.click();
 
-  importFileInput.onchange = e => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const data = JSON.parse(reader.result);
-
-        categories = data.categories || [];
-        meals = data.meals || [];
-        plan = data.plan || plan;
-        ingredientGroups = data.ingredientGroups || ingredientGroups;
-        ingredientGroupOrder =
-          data.ingredientGroupOrder || ingredientGroupOrder;
-
-        saveAll();
-        localStorage.setItem(
-          "mp_ingredientGroups",
-          JSON.stringify(ingredientGroups)
-        );
-        localStorage.setItem(
-          "mp_ingredientGroupOrder",
-          JSON.stringify(ingredientGroupOrder)
-        );
-
-        renderCategories();
-        renderMeals();
-        renderPlanner();
-        renderIngredientGroups();
-        renderGroceryListPreview();
-
-        alert("Import complete.");
-      } catch {
-        alert("Invalid file.");
-      }
-    };
-    reader.readAsText(file);
-  };
-}
 // ================= OFFLINE ATTACHMENTS =================
 
 
@@ -1374,9 +1340,67 @@ window.addEventListener("load", () => {
 const exportDataBtn = document.getElementById("exportDataBtn");
 const importDataBtn = document.getElementById("importDataBtn");
 const importFileInput = document.getElementById("importFileInput");
+// ===== IMPORT MAIN DATA + ATTACHMENTS =====
+if (importDataBtn && importFileInput) {
+  importDataBtn.onclick = () => {
+    importFileInput.click();
+  };
+
+  importFileInput.onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // ATTACHMENTS FILE
+    if (file.name.startsWith("meal-planner-attachments")) {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const parsed = JSON.parse(reader.result);
+        const attachments = parsed.attachments || [];
+
+        const db = await openAttachmentDB();
+        const tx = db.transaction("files", "readwrite");
+        const store = tx.objectStore("files");
+
+        attachments.forEach(a => {
+          const blob = new Blob([a.blob], { type: a.type });
+          store.put(blob, a.id);
+        });
+
+        tx.oncomplete = () => alert("Attachment import complete.");
+      };
+      reader.readAsText(file);
+      return;
+    }
+
+    // MAIN DATA FILE
+    const reader = new FileReader();
+    reader.onload = () => {
+      const data = JSON.parse(reader.result);
+
+      categories = data.categories || [];
+      meals = data.meals || [];
+      plan = data.plan || plan;
+      ingredientGroups = data.ingredientGroups || ingredientGroups;
+      ingredientGroupOrder =
+        data.ingredientGroupOrder || ingredientGroupOrder;
+
+      saveAll();
+      renderCategories();
+      renderMeals();
+      renderPlanner();
+      renderIngredientGroups();
+      renderGroceryListPreview();
+
+      alert("Import complete.");
+    };
+    reader.readAsText(file);
+  };
+}
+
 
 if (exportDataBtn) {
-  exportDataBtn.onclick = () => {
+  exportDataBtn.onclick = async () => {
+
     // ===== EXPORT MAIN DATA =====
     const payload = {
       categories,
@@ -1398,76 +1422,36 @@ if (exportDataBtn) {
     dataLink.click();
     URL.revokeObjectURL(dataUrl);
 
-    // ===== EXPORT ATTACHMENTS (IndexedDB) =====
-    openAttachmentDB().then(db => {
-      const tx = db.transaction("files", "readonly");
-      const store = tx.objectStore("files");
-      const collected = [];
+    // ===== EXPORT ATTACHMENTS =====
+    const db = await openAttachmentDB();
+    const tx = db.transaction("files", "readonly");
+    const store = tx.objectStore("files");
 
-      store.openCursor().onsuccess = e => {
-        const cursor = e.target.result;
-        if (cursor) {
-          collected.push({
-            id: cursor.key,
-            type: cursor.value.type,
-            blob: cursor.value
-          });
-          cursor.continue();
-        } else {
-          const attachBlob = new Blob(
-            [JSON.stringify({ attachments: collected })],
-            { type: "application/json" }
-          );
+    const collected = [];
 
-          const attachUrl = URL.createObjectURL(attachBlob);
-          const attachLink = document.createElement("a");
-          attachLink.href = attachUrl;
-          attachLink.download = "meal-planner-attachments.json";
-          attachLink.click();
-          URL.revokeObjectURL(attachUrl);
-        }
-      };
-    });
-  };
-}
+    store.openCursor().onsuccess = e => {
+      const cursor = e.target.result;
+      if (cursor) {
+        collected.push({
+          id: cursor.key,
+          type: cursor.value.type,
+          blob: cursor.value
+        });
+        cursor.continue();
+      } else {
+        const attachBlob = new Blob(
+          [JSON.stringify({ attachments: collected })],
+          { type: "application/json" }
+        );
 
-
-if (importDataBtn && importFileInput) {
-  importDataBtn.onclick = () => importFileInput.click();
-
-  importFileInput.onchange = e => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const data = JSON.parse(reader.result);
-
-      categories = data.categories || [];
-      meals = data.meals || [];
-      plan = data.plan || plan;
-      ingredientGroups = data.ingredientGroups || ingredientGroups;
-      ingredientGroupOrder =
-        data.ingredientGroupOrder || ingredientGroupOrder;
-
-      saveAll();
-      localStorage.setItem(
-        "mp_ingredientGroups",
-        JSON.stringify(ingredientGroups)
-      );
-      localStorage.setItem(
-        "mp_ingredientGroupOrder",
-        JSON.stringify(ingredientGroupOrder)
-      );
-
-      renderCategories();
-      renderMeals();
-      renderPlanner();
-      renderIngredientGroups();
-      renderGroceryListPreview();
+        const attachUrl = URL.createObjectURL(attachBlob);
+        const attachLink = document.createElement("a");
+        attachLink.href = attachUrl;
+        attachLink.download = "meal-planner-attachments.json";
+        attachLink.click();
+        URL.revokeObjectURL(attachUrl);
+      }
     };
-
-    reader.readAsText(file);
   };
 }
 
