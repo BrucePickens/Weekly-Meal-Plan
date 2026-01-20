@@ -1,0 +1,260 @@
+index.html<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weekly Meal Planner</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+<!-- ================= PLANNER SELECT OVERLAY ================= -->
+<div id="plannerOverlay" class="modal hidden">
+    <div class="modal-content">
+        <h3 id="plannerOverlayTitle">Select Category</h3>
+        <div id="plannerCategoryList"></div>
+        <button id="plannerOverlayCancel">Cancel</button>
+    </div>
+</div>
+<!-- ================================
+     RECIPE TEXT EDITOR (HIDDEN)
+================================ -->
+<div id="recipeTextEditor" class="recipe-overlay hidden">
+  <div class="recipe-header">
+    <button id="closeRecipeTextEditorBtn">×</button>
+    <h2>Edit Recipe Text</h2>
+    <button id="saveRecipeTextBtn">Save</button>
+    <button id="deleteRecipeTextBtn">Delete</button>
+  </div>
+
+  <div class="recipe-body">
+    <textarea id="recipeTextInput"
+              style="width:100%; height:70vh;"></textarea>
+  </div>
+</div>
+
+
+<body>
+    <!-- ACTIVE VERSION — DO NOT EDIT BACKUPS -->
+
+<header class="app-header">
+    <h1>Weekly Meal Planner</h1>
+
+    <nav class="top-nav">
+        <button id="btnPlanner" class="tab-btn">Planner</button>
+        <button id="btnMeals" class="tab-btn">Meals</button>
+        <button id="btnCategories" class="tab-btn">Categories</button>
+    </nav>
+</header>
+
+<main>
+
+    <!-- ================= PLANNER ================= -->
+    <section id="plannerSection" class="section hidden">
+        <button id="clearWeekBtn" style="margin-bottom:12px;">Clear Week</button>
+
+        <h2>Weekly Planner</h2>
+<div id="weekGrid">
+  <div class="day-card" data-day="sun">
+    Sunday<br>
+    <span></span>
+    <div class="planner-actions"></div>
+  </div>
+
+  <div class="day-card" data-day="mon">
+    Monday<br>
+    <span></span>
+    <div class="planner-actions"></div>
+  </div>
+
+  <div class="day-card" data-day="tue">
+    Tuesday<br>
+    <span></span>
+    <div class="planner-actions"></div>
+  </div>
+
+  <div class="day-card" data-day="wed">
+    Wednesday<br>
+    <span></span>
+    <div class="planner-actions"></div>
+  </div>
+
+  <div class="day-card" data-day="thu">
+    Thursday<br>
+    <span></span>
+    <div class="planner-actions"></div>
+  </div>
+
+  <div class="day-card" data-day="fri">
+    Friday<br>
+    <span></span>
+    <div class="planner-actions"></div>
+  </div>
+
+  <div class="day-card" data-day="sat">
+    Saturday<br>
+    <span></span>
+    <div class="planner-actions"></div>
+  </div>
+</div>
+
+
+
+    </section>
+
+    <!-- ================= MEALS ================= -->
+    <section id="mealsSection" class="section hidden">
+     <h2>Meals</h2>
+
+<div id="dataTransferControls"
+     style="margin:12px 0; display:flex; gap:8px; flex-wrap:wrap;">
+  <button id="exportDataBtn">Export Data</button>
+  <button id="importDataBtn">Import Data</button>
+  <input id="importFileInput" type="file" accept="application/json" hidden>
+</div>
+
+
+<button id="addMealBtn">Add Meal</button>
+
+<input
+  type="text"
+  id="mealSearchInput"
+  placeholder="Search meals or ingredients…"
+/>
+
+
+        <div id="mealList"></div>
+        <hr>
+
+<h3>Ingredient Groups</h3>
+
+<div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:10px;">
+    <input
+        type="text"
+        id="newIngredientGroupInput"
+        placeholder="New ingredient group"
+    >
+    <button id="addIngredientGroupBtn">Add Group</button>
+
+    <input
+        type="text"
+        id="newIngredientInput"
+        placeholder="Add ingredient (e.g. milk)"
+    >
+    <button id="addIngredientBtn">Add Ingredient</button>
+
+    <select id="ingredientTargetGroup"></select>
+</div>
+
+<div id="ingredientGroupDisplay"></div>
+
+<hr>
+
+
+<h3>Grocery List (Preview — Grouped)</h3>
+<button id="printGroceryBtn">Print Grocery List</button>
+
+<ul id="groceryListPreview"></ul>
+
+    </section>
+
+    <!-- ================= CATEGORIES ================= -->
+    <section id="categoriesSection" class="section hidden">
+        <h2>Categories</h2>
+
+        <input type="text" id="newCategoryInput" placeholder="New category">
+        <button id="addCategoryBtn">Add Category</button>
+
+        <ul id="categoryList"></ul>
+    </section>
+
+</main>
+
+<!-- ================= MEAL MODAL ================= -->
+<div id="mealModal" class="modal hidden">
+    <div class="modal-content">
+        <h3>Add Meal</h3>
+
+        <label>Meal Name</label>
+        <input type="text" id="mealNameInput">
+
+       <label>Categories</label>
+<div id="mealCategoryCheckboxes"></div>
+
+
+        <label>Ingredients (one per line)</label>
+<textarea id="mealIngredientsInput" placeholder="e.g.
+2 potatoes
+1 tbsp olive oil
+Salt"></textarea>
+
+<label>Instructions</label>
+<textarea id="mealInstructionsInput"></textarea>
+<div id="mealAttachments">
+    <strong>Attachments</strong>
+    <ul id="mealAttachmentList"></ul>
+</div>
+
+<div id="mealRatingGroup">
+  <label><input type="radio" name="mealRating" value="S"> S</label>
+  <label><input type="radio" name="mealRating" value="M"> M</label>
+  <label><input type="radio" name="mealRating" value="F"> F</label>
+</div>
+
+        <button id="saveMealBtn">Save Meal</button>
+        <button class="closeModalBtn">Cancel</button>
+    </div>
+</div>
+
+<script src="script.js"></script>
+  
+<!-- ================================
+     FULL-SCREEN RECIPE VIEW (LOCKED)
+================================ -->
+<div id="recipeOverlay" class="recipe-overlay hidden">
+  <div class="recipe-header">
+    <button id="closeRecipeBtn">×</button>
+    <h2 id="recipeMealTitle">Meal Name</h2>
+
+    <div class="recipe-header-actions">
+      <button id="editRecipeNotesBtn">Edit Notes</button>
+      <button id="editRecipeIngredientsBtn">Edit Ingredients</button>
+      <button id="editRecipeTextBtn">Edit Recipe Text</button>
+      <button id="addRecipeAttachmentBtn">Add Attachment</button>
+      <button id="toggleRecipeExpandBtn">Expand</button>
+
+      <input
+  type="file"
+  id="recipeAttachmentFileInput"
+  accept="image/*,application/pdf"
+  hidden
+/>
+
+      <button id="printRecipeBtn">Print</button>
+    </div>
+  </div>
+
+  <div class="recipe-body">
+    <section class="recipe-section">
+      <h3>Recipe Text</h3>
+      <div id="recipeTextDisplay" class="recipe-text"></div>
+    </section>
+
+    <section class="recipe-section">
+      <h3>Ingredients</h3>
+      <ul id="recipeIngredientList"></ul>
+    </section>
+
+    <section class="recipe-section">
+      <h3>Notes</h3>
+      <div id="recipeNotes" class="recipe-notes"></div>
+    </section>
+
+    <section class="recipe-section">
+      <h3>Attachments</h3>
+      <div id="recipeAttachments" class="recipe-attachments"></div>
+    </section>
+  </div>
+</div>
+
+</body>
+</html>
