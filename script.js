@@ -16,9 +16,14 @@
   box.style.zIndex = "999999";
   box.style.whiteSpace = "pre-wrap";
   box.textContent = "JS Errors:\n";
-  document.addEventListener("DOMContentLoaded", () => {
+ function attachBox() {
+  if (document.body) {
     document.body.appendChild(box);
-  });
+  } else {
+    setTimeout(attachBox, 50);
+  }
+}
+attachBox();
 
   window.onerror = function (msg, src, line, col, err) {
     box.textContent += `\n${msg}\nline ${line}:${col}\n`;
