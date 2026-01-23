@@ -1,3 +1,34 @@
+
+/* ===== TEMP SAFARI ERROR LOGGER (REMOVE AFTER FIX) ===== */
+(function () {
+  const box = document.createElement("div");
+  box.style.position = "fixed";
+  box.style.bottom = "0";
+  box.style.left = "0";
+  box.style.right = "0";
+  box.style.maxHeight = "40%";
+  box.style.overflow = "auto";
+  box.style.background = "#111";
+  box.style.color = "#f55";
+  box.style.fontSize = "12px";
+  box.style.fontFamily = "monospace";
+  box.style.padding = "8px";
+  box.style.zIndex = "999999";
+  box.style.whiteSpace = "pre-wrap";
+  box.textContent = "JS Errors:\n";
+  document.addEventListener("DOMContentLoaded", () => {
+    document.body.appendChild(box);
+  });
+
+  window.onerror = function (msg, src, line, col, err) {
+    box.textContent += `\n${msg}\nline ${line}:${col}\n`;
+  };
+
+  window.onunhandledrejection = function (e) {
+    box.textContent += `\nPROMISE ERROR:\n${e.reason}\n`;
+  };
+})();
+
 console.log("SCRIPT LOADED");
 /* =========================================================
    INDEXEDDB — ATTACHMENTS ONLY (ISOLATED)
@@ -70,17 +101,7 @@ async function deleteAttachmentBlob(id) {
 /* =========================================================
    DATA + STORAGE
 ========================================================= */
-function deleteCategory(catName) {
-  categories = categories.filter(c => c !== catName);
 
-  meals.forEach(meal => {
-    if (Array.isArray(meal.categoryIds)) {
-      meal.categoryIds = meal.categoryIds.filter(c => c !== catName);
-    }
-  });
-
-  saveAll();
-}
 
 let categories = JSON.parse(localStorage.getItem("mp_categories")) || [];
 let meals = JSON.parse(localStorage.getItem("mp_meals")) || [];
@@ -278,6 +299,9 @@ function sanitizePlanner() {
    DOM REFERENCES (EXPLICIT — NO IMPLICIT GLOBALS)
 ========================================================= */
 
+let selectedPlannerDay = null;
+let editingMealId = null;
+
 const btnPlanner = document.getElementById("btnPlanner");
 const btnMeals = document.getElementById("btnMeals");
 const btnCategories = document.getElementById("btnCategories");
@@ -343,6 +367,18 @@ function showSection(section) {
 btnPlanner.onclick = () => showSection(plannerSection);
 btnMeals.onclick = () => showSection(mealsSection);
 btnCategories.onclick = () => showSection(categoriesSection);
+if (addCategoryBtn) {
+  addCategoryBtn.onclick = () => {
+    const val = newCategoryInput.value.trim();
+    if (!val || categories.includes(val)) return;
+
+    categories.push(val);
+    newCategoryInput.value = "";
+    saveAll();
+    renderCategories();
+  };
+}
+
 // =========================================================
 // INGREDIENT GROUP UI — CREATE ONLY
 // =========================================================
@@ -455,19 +491,16 @@ downBtn.onclick = () => moveIngredientGroup(groupName, 1);
 title.appendChild(upBtn);
 title.appendChild(downBtn);
 
-let isCollapsed = false;
+        const list = document.createElement("ul");
+        let isCollapsed = false;
 
 title.onclick = () => {
     isCollapsed = !isCollapsed;
     list.style.display = isCollapsed ? "none" : "block";
 };
 
-}
 
-
-        const list = document.createElement("ul");
-
-ingredientGroups[groupName].forEach(item => {
+(ingredientGroups[groupName] || []).forEach(item => {
     const li = document.createElement("li");
     const checkbox = document.createElement("input");
 checkbox.type = "checkbox";
@@ -650,15 +683,6 @@ function deleteCategory(catName) {
     renderMeals();
 }
 
-addCategoryBtn.onclick = () => {
-    const val = newCategoryInput.value.trim();
-    if (!val || categories.includes(val)) return;
-
-    categories.push(val);
-    newCategoryInput.value = "";
-    saveAll();
-    renderCategories();
-};
 function renderMealCategoryCheckboxes(selectedIds = []) {
     const container = document.getElementById("mealCategoryCheckboxes");
     if (!container) return;
@@ -967,14 +991,6 @@ closeMealModalBtn.onclick = () => {
 /* =========================================================
    PLANNER DISPLAY
 ========================================================= */
-function bindPlannerDayClicks() {
-  document.querySelectorAll(".day-card").forEach(card => {
-    card.onclick = () => {
-      selectedPlannerDay = card.dataset.day;
-      openPlannerCategoryOverlay();
-    };
-  });
-}
 
 function getPlannerMealIds() {
     const ids = new Set();
@@ -1033,8 +1049,6 @@ function bindPlannerDayClicks() {
    LAYER 2 — PLANNER OVERLAY (FINAL, SAFE)
 ========================================================= */
 
-let selectedPlannerDay = null;
-let editingMealId = null;
 
 
 function openPlannerCategoryOverlay() {
@@ -1685,7 +1699,6 @@ renderCategories();
      showSection(plannerSection);
 
 });
-
 
 
 
