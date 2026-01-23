@@ -70,6 +70,17 @@ async function deleteAttachmentBlob(id) {
 /* =========================================================
    DATA + STORAGE
 ========================================================= */
+function deleteCategory(catName) {
+  categories = categories.filter(c => c !== catName);
+
+  meals.forEach(meal => {
+    if (Array.isArray(meal.categoryIds)) {
+      meal.categoryIds = meal.categoryIds.filter(c => c !== catName);
+    }
+  });
+
+  saveAll();
+}
 
 let categories = JSON.parse(localStorage.getItem("mp_categories")) || [];
 let meals = JSON.parse(localStorage.getItem("mp_meals")) || [];
@@ -205,6 +216,24 @@ function sanitizeIngredientGroups() {
         "mp_ingredientGroupOrder",
         JSON.stringify(ingredientGroupOrder)
     );
+}
+function moveIngredientGroup(groupName, direction) {
+    const idx = ingredientGroupOrder.indexOf(groupName);
+    if (idx === -1) return;
+
+    const newIdx = idx + direction;
+    if (newIdx < 0 || newIdx >= ingredientGroupOrder.length) return;
+
+    const temp = ingredientGroupOrder[idx];
+    ingredientGroupOrder[idx] = ingredientGroupOrder[newIdx];
+    ingredientGroupOrder[newIdx] = temp;
+
+    localStorage.setItem(
+        "mp_ingredientGroupOrder",
+        JSON.stringify(ingredientGroupOrder)
+    );
+
+    renderIngredientGroups();
 }
 
 function normalizeMeals() {
@@ -432,23 +461,7 @@ title.onclick = () => {
     isCollapsed = !isCollapsed;
     list.style.display = isCollapsed ? "none" : "block";
 };
-function moveIngredientGroup(groupName, direction) {
-    const idx = ingredientGroupOrder.indexOf(groupName);
-    if (idx === -1) return;
 
-    const newIdx = idx + direction;
-    if (newIdx < 0 || newIdx >= ingredientGroupOrder.length) return;
-
-    const temp = ingredientGroupOrder[idx];
-    ingredientGroupOrder[idx] = ingredientGroupOrder[newIdx];
-    ingredientGroupOrder[newIdx] = temp;
-
-    localStorage.setItem(
-        "mp_ingredientGroupOrder",
-        JSON.stringify(ingredientGroupOrder)
-    );
-
-    renderIngredientGroups();
 }
 
 
@@ -1264,7 +1277,7 @@ function renderRecipeAttachments(meal) {
         const url = URL.createObjectURL(blob);
         win.location.href = url;
 
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        
       });
     };
 
@@ -1379,13 +1392,14 @@ if (exportDataBtn) {
     );
 
     const dataUrl = URL.createObjectURL(dataBlob);
-    const dataLink = document.createElement("a");
+  const dataLink = document.createElement("a");
+
     dataLink.href = dataUrl;
     dataLink.download = "meal-planner-data.json";
     dataLink.click();
     URL.revokeObjectURL(dataUrl);
 
-    // ===== EXPORT ATTACHMENTS =====
+      // ===== EXPORT ATTACHMENTS =====
     const db = await openAttachmentDB();
     const tx = db.transaction("files", "readonly");
     const store = tx.objectStore("files");
@@ -1394,16 +1408,28 @@ if (exportDataBtn) {
 
     store.openCursor().onsuccess = e => {
       const cursor = e.target.result;
+
       if (cursor) {
         const reader = new FileReader();
-reader.onload = () => {
-  collected.push({
-    id: cursor.key,
-    type: cursor.value.type,
-    data: reader.result
-  });
-};
-reader.readAsDataURL(cursor.value);
+
+        reader.onload = () => {
+          collected.push({
+            id: cursor.key,
+            type: cursor.value.type,
+            data: reader.result
+          });
+        };
+
+        reader.readAsDataURL(cursor.value);
+        cursor.continue();
+
+      } else {
+        const attachPayload = { attachments: collected };
+
+        const attachBlob = new Blob(
+          [JSON.stringify(attachPayload, null, 2)],
+          { type: "application/json" }
+        );
 
         const attachUrl = URL.createObjectURL(attachBlob);
         const attachLink = document.createElement("a");
@@ -1413,8 +1439,9 @@ reader.readAsDataURL(cursor.value);
         URL.revokeObjectURL(attachUrl);
       }
     };
+
   };
-}
+
 
     // ===== Recipe Attachment Upload (LOCKED) =====
 const addAttachmentBtn =
