@@ -1228,6 +1228,7 @@ function renderRecipeText(meal) {
             ? meal.recipeText
             : "No recipe text added.";
 }
+
 function renderRecipeAttachments(meal) {
   const box = document.getElementById("recipeAttachments");
   if (!box) return;
@@ -1240,97 +1241,49 @@ function renderRecipeAttachments(meal) {
   }
 
   meal.attachments.forEach((att, idx) => {
-    const wrapper = document.createElement("div");
-    wrapper.style.marginBottom = "12px";
+    const row = document.createElement("div");
+    row.style.marginBottom = "8px";
 
-   // IMAGE
-if (att.type && att.type.startsWith("image/")) {
-  const img = document.createElement("img");
+    const openBtn = document.createElement("button");
+    openBtn.textContent = `Open attachment — ${att.name || ""}`;
 
-  getAttachmentBlob(att.id).then(blob => {
-    if (!blob) return;
-    img.src = URL.createObjectURL(blob);
-  });
+    openBtn.onclick = () => {
+      const win = window.open("", "_blank");
+      if (!win) {
+        alert("Popup blocked. Please allow popups for this site.");
+        return;
+      }
 
-  img.style.maxWidth = "100%";
-  img.style.display = "block";
-  img.style.border = "1px solid #ccc";
-  img.style.marginBottom = "6px";
- const fallback = document.createElement("div");
-fallback.textContent = "This image format isn’t supported on this device.";
-fallback.style.fontStyle = "italic";
-fallback.style.color = "#666";
-fallback.style.display = "none";
+      getAttachmentBlob(att.id).then(blob => {
+        if (!blob) {
+          win.close();
+          alert("Attachment file missing.");
+          return;
+        }
 
-img.onerror = () => {
-  img.style.display = "none";
-  fallback.style.display = "block";
-};
-fallback.onclick = () => {
-  getAttachmentBlob(att.id).then(blob => {
-    if (!blob) return;
-    const url = URL.createObjectURL(blob);
-    window.open(url, "_blank");
-  });
-};
-fallback.style.cursor = "pointer";
-fallback.textContent += " (tap to open)";
+        const url = URL.createObjectURL(blob);
+        win.location.href = url;
 
-wrapper.appendChild(img);
-wrapper.appendChild(fallback);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      });
+    };
 
-}
+    const delBtn = document.createElement("button");
+    delBtn.textContent = "✕";
+    delBtn.style.marginLeft = "6px";
 
-// PDF (iPad-safe)
-else if (att.type === "application/pdf") {
-  const iframe = document.createElement("iframe");
-
-  getAttachmentBlob(att.id).then(blob => {
-    if (!blob) return;
-    iframe.src = URL.createObjectURL(blob);
-  });
-
-  iframe.style.width = "100%";
-  iframe.style.height = "calc(100vh - 120px)";
-  iframe.style.border = "1px solid #ccc";
-
-  wrapper.appendChild(iframe);
-}
-
-
-    // OTHER FILES (Word, etc.)
-    else {
-      const link = document.createElement("a");
-      link.href = att.data;
-      link.textContent = att.name;
-      link.target = "_blank";
-      wrapper.appendChild(link);
-    }
-
-    const del = document.createElement("button");
-    del.textContent = "✕ Delete";
-    del.style.display = "block";
-    del.style.marginTop = "4px";
-    del.onclick = () => {
+    delBtn.onclick = () => {
       if (!confirm("Delete attachment?")) return;
       meal.attachments.splice(idx, 1);
       saveAll();
       renderRecipeAttachments(meal);
     };
 
-    wrapper.appendChild(del);
-    box.appendChild(wrapper);
+    row.appendChild(openBtn);
+    row.appendChild(delBtn);
+    box.appendChild(row);
   });
 }
-
-
-
-/* =========================================================
-   INIT
-========================================================= */
-
-
-// ================= OFFLINE ATTACHMENTS =================
 
 
 
@@ -1361,10 +1314,20 @@ if (importDataBtn && importFileInput) {
         const tx = db.transaction("files", "readwrite");
         const store = tx.objectStore("files");
 
-        attachments.forEach(a => {
-          const blob = new Blob([a.blob], { type: a.type });
-          store.put(blob, a.id);
-        });
+      attachments.forEach(a => {
+  const byteString = atob(a.data.split(",")[1]);
+  const mime = a.type;
+  const ab = new ArrayBuffer(byteString.length);
+  const ia = new Uint8Array(ab);
+
+  for (let i = 0; i < byteString.length; i++) {
+    ia[i] = byteString.charCodeAt(i);
+  }
+
+  const blob = new Blob([ab], { type: mime });
+  store.put(blob, a.id);
+});
+
 
         tx.oncomplete = () => alert("Attachment import complete.");
       };
@@ -1432,17 +1395,15 @@ if (exportDataBtn) {
     store.openCursor().onsuccess = e => {
       const cursor = e.target.result;
       if (cursor) {
-        collected.push({
-          id: cursor.key,
-          type: cursor.value.type,
-          blob: cursor.value
-        });
-        cursor.continue();
-      } else {
-        const attachBlob = new Blob(
-          [JSON.stringify({ attachments: collected })],
-          { type: "application/json" }
-        );
+        const reader = new FileReader();
+reader.onload = () => {
+  collected.push({
+    id: cursor.key,
+    type: cursor.value.type,
+    data: reader.result
+  });
+};
+reader.readAsDataURL(cursor.value);
 
         const attachUrl = URL.createObjectURL(attachBlob);
         const attachLink = document.createElement("a");
