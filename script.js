@@ -1404,14 +1404,24 @@ if (importDataBtn && importFileInput) {
       ingredientGroupOrder =
         data.ingredientGroupOrder || ingredientGroupOrder;
 
-      saveAll();
-      renderCategories();
-      renderMeals();
-      renderPlanner();
-      renderIngredientGroups();
-      renderGroceryListPreview();
+  saveAll();
 
-      alert("Import complete.");
+// FULL REBUILD — REQUIRED AFTER IMPORT
+sanitizePlanner();
+sanitizeIngredientGroups();
+normalizeMeals();
+
+renderCategories();
+renderMeals();
+renderIngredientGroups();
+renderPlanner();
+renderGroceryListPreview();
+
+// Reset to a known-good section
+showSection(plannerSection);
+
+alert("Import complete.");
+
     };
     reader.readAsText(file);
   };
