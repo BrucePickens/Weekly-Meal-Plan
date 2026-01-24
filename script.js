@@ -1,3 +1,40 @@
+/* ===== TEMP SAFARI ERROR LOGGER (REMOVE AFTER FIX) ===== */
+(function () {
+  const box = document.createElement("div");
+  box.style.position = "fixed";
+  box.style.bottom = "0";
+  box.style.left = "0";
+  box.style.right = "0";
+  box.style.maxHeight = "40%";
+  box.style.overflow = "auto";
+  box.style.background = "#111";
+  box.style.color = "#f55";
+  box.style.fontSize = "12px";
+  box.style.fontFamily = "monospace";
+  box.style.padding = "8px";
+  box.style.zIndex = "999999";
+  box.style.whiteSpace = "pre-wrap";
+  box.textContent = "JS Errors:\n";
+
+  function attachBox() {
+    if (document.body) {
+      document.body.appendChild(box);
+    } else {
+      setTimeout(attachBox, 50);
+    }
+  }
+  attachBox();
+
+  window.onerror = function (msg, src, line, col) {
+    box.textContent += `\n${msg}\nline ${line}:${col}\n`;
+  };
+
+  window.onunhandledrejection = function (e) {
+    box.textContent += `\nPROMISE ERROR:\n${e.reason}\n`;
+  };
+})();
+
+
 console.log("SCRIPT LOADED");
 /* =========================================================
    INDEXEDDB — ATTACHMENTS ONLY (ISOLATED)
