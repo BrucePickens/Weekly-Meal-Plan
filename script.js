@@ -1,40 +1,3 @@
-/* ===== TEMP SAFARI ERROR LOGGER (REMOVE AFTER FIX) ===== */
-(function () {
-  const box = document.createElement("div");
-  box.style.position = "fixed";
-  box.style.bottom = "0";
-  box.style.left = "0";
-  box.style.right = "0";
-  box.style.maxHeight = "40%";
-  box.style.overflow = "auto";
-  box.style.background = "#111";
-  box.style.color = "#f55";
-  box.style.fontSize = "12px";
-  box.style.fontFamily = "monospace";
-  box.style.padding = "8px";
-  box.style.zIndex = "999999";
-  box.style.whiteSpace = "pre-wrap";
-  box.textContent = "JS Errors:\n";
-
-  function attachBox() {
-    if (document.body) {
-      document.body.appendChild(box);
-    } else {
-      setTimeout(attachBox, 50);
-    }
-  }
-  attachBox();
-
-  window.onerror = function (msg, src, line, col) {
-    box.textContent += `\n${msg}\nline ${line}:${col}\n`;
-  };
-
-  window.onunhandledrejection = function (e) {
-    box.textContent += `\nPROMISE ERROR:\n${e.reason}\n`;
-  };
-})();
-
-
 console.log("SCRIPT LOADED");
 /* =========================================================
    INDEXEDDB — ATTACHMENTS ONLY (ISOLATED)
@@ -1265,6 +1228,7 @@ function renderRecipeText(meal) {
             ? meal.recipeText
             : "No recipe text added.";
 }
+
 function renderRecipeAttachments(meal) {
   const box = document.getElementById("recipeAttachments");
   if (!box) return;
@@ -1277,80 +1241,49 @@ function renderRecipeAttachments(meal) {
   }
 
   meal.attachments.forEach((att, idx) => {
-    const wrapper = document.createElement("div");
-    wrapper.style.marginBottom = "12px";
+    const row = document.createElement("div");
+    row.style.marginBottom = "8px";
 
-    // IMAGE
-    if (att.type && att.type.startsWith("image/")) {
-      const img = document.createElement("img");
+    const openBtn = document.createElement("button");
+    openBtn.textContent = `Open attachment — ${att.name || ""}`;
 
-      getAttachmentBlob(att.id).then(blob => {
-        if (!blob) return;
-        img.src = URL.createObjectURL(blob);
-      });
-
-      img.style.maxWidth = "100%";
-      img.style.display = "block";
-      img.style.border = "1px solid #ccc";
-      img.style.marginBottom = "6px";
-
-      wrapper.appendChild(img);
-    }
-
-    // PDF
-    else if (att.type === "application/pdf") {
-      const iframe = document.createElement("iframe");
+    openBtn.onclick = () => {
+      const win = window.open("", "_blank");
+      if (!win) {
+        alert("Popup blocked. Please allow popups for this site.");
+        return;
+      }
 
       getAttachmentBlob(att.id).then(blob => {
-        if (!blob) return;
-        iframe.src = URL.createObjectURL(blob);
+        if (!blob) {
+          win.close();
+          alert("Attachment file missing.");
+          return;
+        }
+
+        const url = URL.createObjectURL(blob);
+        win.location.href = url;
+
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
       });
+    };
 
-      iframe.style.width = "100%";
-      iframe.style.height = "500px";
-      iframe.style.border = "1px solid #ccc";
+    const delBtn = document.createElement("button");
+    delBtn.textContent = "✕";
+    delBtn.style.marginLeft = "6px";
 
-      wrapper.appendChild(iframe);
-    }
-
-    // OTHER FILES
-    else {
-      const link = document.createElement("a");
-      link.textContent = att.name || "Open file";
-      link.target = "_blank";
-
-      getAttachmentBlob(att.id).then(blob => {
-        if (!blob) return;
-        link.href = URL.createObjectURL(blob);
-      });
-
-      wrapper.appendChild(link);
-    }
-
-    const del = document.createElement("button");
-    del.textContent = "✕ Delete";
-    del.style.display = "block";
-    del.style.marginTop = "4px";
-
-    del.onclick = () => {
+    delBtn.onclick = () => {
       if (!confirm("Delete attachment?")) return;
       meal.attachments.splice(idx, 1);
       saveAll();
       renderRecipeAttachments(meal);
     };
 
-    wrapper.appendChild(del);
-    box.appendChild(wrapper);
+    row.appendChild(openBtn);
+    row.appendChild(delBtn);
+    box.appendChild(row);
   });
 }
-
-
-/* =========================================================
-   INIT
-========================================================= */
-
-
-// ================= OFFLINE ATTACHMENTS =================
 
 
 
@@ -1381,10 +1314,20 @@ if (importDataBtn && importFileInput) {
         const tx = db.transaction("files", "readwrite");
         const store = tx.objectStore("files");
 
-        attachments.forEach(a => {
-          const blob = new Blob([a.blob], { type: a.type });
-          store.put(blob, a.id);
-        });
+      attachments.forEach(a => {
+  const byteString = atob(a.data.split(",")[1]);
+  const mime = a.type;
+  const ab = new ArrayBuffer(byteString.length);
+  const ia = new Uint8Array(ab);
+
+  for (let i = 0; i < byteString.length; i++) {
+    ia[i] = byteString.charCodeAt(i);
+  }
+
+  const blob = new Blob([ab], { type: mime });
+  store.put(blob, a.id);
+});
+
 
         tx.oncomplete = () => alert("Attachment import complete.");
       };
@@ -1404,24 +1347,14 @@ if (importDataBtn && importFileInput) {
       ingredientGroupOrder =
         data.ingredientGroupOrder || ingredientGroupOrder;
 
-  saveAll();
+      saveAll();
+      renderCategories();
+      renderMeals();
+      renderPlanner();
+      renderIngredientGroups();
+      renderGroceryListPreview();
 
-// FULL REBUILD — REQUIRED AFTER IMPORT
-sanitizePlanner();
-sanitizeIngredientGroups();
-normalizeMeals();
-
-renderCategories();
-renderMeals();
-renderIngredientGroups();
-renderPlanner();
-renderGroceryListPreview();
-
-// Reset to a known-good section
-showSection(plannerSection);
-
-alert("Import complete.");
-
+      alert("Import complete.");
     };
     reader.readAsText(file);
   };
@@ -1462,17 +1395,15 @@ if (exportDataBtn) {
     store.openCursor().onsuccess = e => {
       const cursor = e.target.result;
       if (cursor) {
-        collected.push({
-          id: cursor.key,
-          type: cursor.value.type,
-          blob: cursor.value
-        });
-        cursor.continue();
-      } else {
-        const attachBlob = new Blob(
-          [JSON.stringify({ attachments: collected })],
-          { type: "application/json" }
-        );
+        const reader = new FileReader();
+reader.onload = () => {
+  collected.push({
+    id: cursor.key,
+    type: cursor.value.type,
+    data: reader.result
+  });
+};
+reader.readAsDataURL(cursor.value);
 
         const attachUrl = URL.createObjectURL(attachBlob);
         const attachLink = document.createElement("a");
