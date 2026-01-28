@@ -1439,7 +1439,10 @@ if (importDataBtn && importFileInput) {
 if (exportDataBtn) {
   exportDataBtn.onclick = async () => {
 
-    // ===== EXPORT MAIN DATA =====
+    /* ===============================
+       EXPORT MAIN DATA
+    =============================== */
+
     const payload = {
       categories,
       meals,
@@ -1453,48 +1456,85 @@ if (exportDataBtn) {
       { type: "application/json" }
     );
 
-    const dataUrl = URL.createObjectURL(dataBlob);
-    const dataLink = document.createElement("a");
-    dataLink.href = dataUrl;
-    dataLink.download = "meal-planner-data.json";
-    dataLink.click();
-    URL.revokeObjectURL(dataUrl);
-// ===== EXPORT ATTACHMENTS =====
-const db = await openAttachmentDB();
-const tx = db.transaction("files", "readonly");
-const store = tx.objectStore("files");
+ const dataUrl = URL.createObjectURL(dataBlob);
+const dataLink = document.createElement("a");
+dataLink.href = dataUrl;
+dataLink.download = "meal-planner-data.json";
 
-const collected = [];
+document.body.appendChild(dataLink);
+dataLink.click();
+document.body.removeChild(dataLink);
 
-store.openCursor().onsuccess = e => {
-  const cursor = e.target.result;
+URL.revokeObjectURL(dataUrl);
 
-  if (!cursor) {
-    const attachBlob = new Blob(
-      [JSON.stringify({ attachments: collected }, null, 2)],
-      { type: "application/json" }
+
+    /* ===============================
+       EXPORT ATTACHMENTS (LOCKED)
+    =============================== */
+
+    const db = await openAttachmentDB();
+
+    const attachments = [];
+await new Promise((resolve, reject) => {
+  const tx = db.transaction(ATTACHMENT_STORE, "readonly");
+  const store = tx.objectStore(ATTACHMENT_STORE);
+
+  const readers = [];
+
+  const req = store.openCursor();
+
+  req.onsuccess = e => {
+    const cursor = e.target.result;
+    if (!cursor) {
+      Promise.all(readers).then(resolve).catch(reject);
+      return;
+    }
+
+    readers.push(
+      new Promise(r => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          attachments.push({
+            id: cursor.key,
+            type: cursor.value.type,
+            data: reader.result
+          });
+          r();
+        };
+        reader.readAsDataURL(cursor.value);
+      })
     );
 
-    const attachUrl = URL.createObjectURL(attachBlob);
-    const attachLink = document.createElement("a");
-    attachLink.href = attachUrl;
-    attachLink.download = "meal-planner-attachments.json";
-    attachLink.click();
-    URL.revokeObjectURL(attachUrl);
-    return;
-  }
-
-  const reader = new FileReader();
-  reader.onload = () => {
-    collected.push({
-      id: cursor.key,
-      type: cursor.value.type,
-      data: reader.result
-    });
     cursor.continue();
   };
-  reader.readAsDataURL(cursor.value);
-};
+
+  req.onerror = () => reject(req.error);
+});
+
+  
+// Always export attachment file — even if empty
+if (attachments.length === 0) {
+  console.warn("No attachment blobs found. Exporting empty attachment file.");
+}
+
+const attachBlob = new Blob(
+  [JSON.stringify({ attachments }, null, 2)],
+  { type: "application/json" }
+);
+
+const attachUrl = URL.createObjectURL(attachBlob);
+
+// Delay second download to satisfy browser security rules
+setTimeout(() => {
+  const attachLink = document.createElement("a");
+  attachLink.href = attachUrl;
+  attachLink.download = "meal-planner-attachments.json";
+  document.body.appendChild(attachLink);
+  attachLink.click();
+  document.body.removeChild(attachLink);
+  URL.revokeObjectURL(attachUrl);
+}, 400);
+
   };
 }
 
