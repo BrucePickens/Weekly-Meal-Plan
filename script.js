@@ -681,7 +681,7 @@ label.appendChild(text);
    MEALS
 ========================================================= */
 function renderMeals() {
-    mealList.innerHTML = "";
+   
 mealList.innerHTML = "";
 
 const q = (mealSearchInput?.value || "").toLowerCase();
@@ -815,30 +815,6 @@ function duplicateMeal(mealId) {
     renderGroceryListPreview();
 }
 
-meals.forEach(m => {
-    const div = document.createElement("div");
-
-    const cats = m.categoryIds ? m.categoryIds.join(", ") : "";
-    const title = document.createElement("span");
-    title.textContent = `${m.name} (${cats})`;
-    title.style.cursor = "pointer";
-
-    title.onclick = () => openEditMeal(m.id);
-
-    const dupBtn = document.createElement("button");
-    dupBtn.textContent = "Duplicate";
-    dupBtn.style.marginLeft = "10px";
-
-    dupBtn.onclick = (e) => {
-        e.stopPropagation();
-        duplicateMeal(m.id);
-    };
-
-    div.appendChild(title);
-    div.appendChild(dupBtn);
-
-    mealList.appendChild(div);
-});
 
 
 
@@ -954,14 +930,6 @@ closeMealModalBtn.onclick = () => {
 /* =========================================================
    PLANNER DISPLAY
 ========================================================= */
-function bindPlannerDayClicks() {
-  document.querySelectorAll(".day-card").forEach(card => {
-    card.onclick = () => {
-      selectedPlannerDay = card.dataset.day;
-      openPlannerCategoryOverlay();
-    };
-  });
-}
 
 function getPlannerMealIds() {
     const ids = new Set();
@@ -1021,7 +989,8 @@ function bindPlannerDayClicks() {
 ========================================================= */
 
 let selectedPlannerDay = null;
-let editingMealId = null;
+
+let editingRecipeTextMeal = null;
 
 
 function openPlannerCategoryOverlay() {
@@ -1134,10 +1103,22 @@ Object.keys(ingredientSelections).forEach(item => {
         if (!Array.isArray(meal.ingredients)) return;
 
         meal.ingredients.forEach(raw => {
-            const ing = raw.trim().toLowerCase();
-            if (!ing) return;
+const ing = raw
+  .toLowerCase()
+  .replace(/[^a-z\s]/g, "")
+  .trim();
 
-            const group = ingredientToGroup[ing] || "Ungrouped";
+if (!ing) return;
+
+// find best matching ingredient group
+let group = "Ungrouped";
+
+Object.keys(ingredientToGroup).forEach(key => {
+  if (ing === key || ing.includes(key)) {
+    group = ingredientToGroup[key];
+  }
+});
+
             if (!groupedCounts[group]) groupedCounts[group] = {};
             groupedCounts[group][ing] = (groupedCounts[group][ing] || 0) + 1;
         });
@@ -1146,23 +1127,38 @@ Object.keys(ingredientSelections).forEach(item => {
     // Render grocery list in ingredientGroupOrder
     ingredientGroupOrder.forEach(groupName => {
         if (!groupedCounts[groupName]) return;
+const groupWrapper = document.createElement("div");
 
-        const header = document.createElement("li");
-        header.className = "ingredient-group-header";
-        header.textContent = groupName;
-        header.style.fontWeight = "bold";
-        header.style.marginTop = "8px";
-        groceryListPreview.appendChild(header);
+const header = document.createElement("div");
+header.className = "ingredient-group-header";
+header.textContent = groupName;
+header.style.fontWeight = "bold";
+header.style.marginTop = "12px";
+header.style.cursor = "pointer";
 
-        const groupItems = document.createElement("ul");
-        groupItems.style.listStyle = "none";
-        groupItems.style.paddingLeft = "12px";
+const groupItems = document.createElement("ul");
+groupItems.style.listStyle = "none";
+groupItems.style.paddingLeft = "16px";
+
+groupWrapper.appendChild(header);
+groupWrapper.appendChild(groupItems);
+groceryListPreview.appendChild(groupWrapper);
+
 
         Object.keys(groupedCounts[groupName]).forEach(item => {
             const count = groupedCounts[groupName][item];
-            const li = document.createElement("li");
-            li.textContent = `• ${item} × ${count}`;
-            groupItems.appendChild(li);
+ const li = document.createElement("li");
+li.textContent = `• ${item} × ${count}`;
+li.style.cursor = "pointer";
+li.dataset.item = item;
+
+// toggle selection
+li.onclick = () => {
+  li.classList.toggle("grocery-selected");
+};
+
+groupItems.appendChild(li);
+
         });
 
         groceryListPreview.appendChild(groupItems);
@@ -1241,32 +1237,111 @@ function renderRecipeAttachments(meal) {
   }
 
   meal.attachments.forEach((att, idx) => {
-    const row = document.createElement("div");
+ const row = document.createElement("div");
+row.className = "recipe-attachment-row";
+
     row.style.marginBottom = "8px";
 
     const openBtn = document.createElement("button");
     openBtn.textContent = `Open attachment — ${att.name || ""}`;
 
-    openBtn.onclick = () => {
-      const win = window.open("", "_blank");
-      if (!win) {
-        alert("Popup blocked. Please allow popups for this site.");
-        return;
-      }
+openBtn.onclick = () => {
 
-      getAttachmentBlob(att.id).then(blob => {
-        if (!blob) {
-          win.close();
-          alert("Attachment file missing.");
-          return;
+  // MUST open synchronously (browser popup rules)
+  const win = window.open("", "_blank");
+
+  if (!win) {
+    alert("Popup blocked. Please allow popups for this site.");
+    return;
+  }
+
+  getAttachmentBlob(att.id).then(blob => {
+
+    // ===== STEP A: Missing blob guard =====
+if (!blob) {
+
+  // === UI notice in popup ===
+  win.document.open();
+  win.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Attachment Missing</title>
+      <style>
+        body {
+          font-family: system-ui, sans-serif;
+          background: #f6f6f6;
+          padding: 24px;
         }
+        .card {
+          max-width: 520px;
+          margin: 40px auto;
+          background: #fff;
+          border: 1px solid #ddd;
+          border-radius: 10px;
+          padding: 20px;
+        }
+        h2 { margin-top: 0; }
+        .muted { color: #666; }
+        button {
+          margin-top: 12px;
+          padding: 8px 14px;
+          border-radius: 6px;
+          border: 1px solid #ccc;
+          background: #eee;
+          cursor: pointer;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <h2>Attachment not found</h2>
+        <p class="muted">
+          This recipe references a file that no longer exists.
+        </p>
+        <p>
+          This usually happens after an old import.
+        </p>
+        <button id="removeBtn">
+          Remove broken attachment
+        </button>
+      </div>
 
-        const url = URL.createObjectURL(blob);
-        win.location.href = url;
+      <script>
+        document.getElementById("removeBtn").onclick = () => {
+          window.opener.postMessage(
+            {
+              type: "REMOVE_BROKEN_ATTACHMENT",
+              mealId: "${meal.id}",
+              attachmentIndex: ${idx}
+            },
+            "*"
+          );
+          window.close();
+        };
+      </script>
+    </body>
+    </html>
+  `);
+  win.document.close();
+  return;
+}
 
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-      });
-    };
+
+// ===== Normal attachment load (DIRECT) =====
+const url = URL.createObjectURL(blob);
+
+// Navigate directly to the PDF
+win.location.href = url;
+
+// Cleanup after load
+win.onload = () => {
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+};
+
+  });
+};
+
 
     const delBtn = document.createElement("button");
     delBtn.textContent = "✕";
@@ -1384,35 +1459,42 @@ if (exportDataBtn) {
     dataLink.download = "meal-planner-data.json";
     dataLink.click();
     URL.revokeObjectURL(dataUrl);
+// ===== EXPORT ATTACHMENTS =====
+const db = await openAttachmentDB();
+const tx = db.transaction("files", "readonly");
+const store = tx.objectStore("files");
 
-    // ===== EXPORT ATTACHMENTS =====
-    const db = await openAttachmentDB();
-    const tx = db.transaction("files", "readonly");
-    const store = tx.objectStore("files");
+const collected = [];
 
-    const collected = [];
+store.openCursor().onsuccess = e => {
+  const cursor = e.target.result;
 
-    store.openCursor().onsuccess = e => {
-      const cursor = e.target.result;
-      if (cursor) {
-        const reader = new FileReader();
-reader.onload = () => {
-  collected.push({
-    id: cursor.key,
-    type: cursor.value.type,
-    data: reader.result
-  });
+  if (!cursor) {
+    const attachBlob = new Blob(
+      [JSON.stringify({ attachments: collected }, null, 2)],
+      { type: "application/json" }
+    );
+
+    const attachUrl = URL.createObjectURL(attachBlob);
+    const attachLink = document.createElement("a");
+    attachLink.href = attachUrl;
+    attachLink.download = "meal-planner-attachments.json";
+    attachLink.click();
+    URL.revokeObjectURL(attachUrl);
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    collected.push({
+      id: cursor.key,
+      type: cursor.value.type,
+      data: reader.result
+    });
+    cursor.continue();
+  };
+  reader.readAsDataURL(cursor.value);
 };
-reader.readAsDataURL(cursor.value);
-
-        const attachUrl = URL.createObjectURL(attachBlob);
-        const attachLink = document.createElement("a");
-        attachLink.href = attachUrl;
-        attachLink.download = "meal-planner-attachments.json";
-        attachLink.click();
-        URL.revokeObjectURL(attachUrl);
-      }
-    };
   };
 }
 
@@ -1469,47 +1551,62 @@ const deleteRecipeTextBtn =
     document.getElementById("deleteRecipeTextBtn");
 
 const editRecipeTextBtn =
-    document.getElementById("editRecipeTextBtn");
+  document.getElementById("editRecipeTextBtn");
 
-let editingRecipeTextMeal = null;
+let isEditingRecipeText = false;
 
-/*
 if (editRecipeTextBtn) {
-    editRecipeTextBtn.onclick = () => {
-        const title =
-            document.getElementById("recipeMealTitle").textContent;
+  editRecipeTextBtn.onclick = () => {
+    if (isEditingRecipeText) return;
 
-        const meal = meals.find(m => m.name === title);
-        if (!meal) return;
+    const title =
+      document.getElementById("recipeMealTitle").textContent;
+    const meal = meals.find(m => m.name === title);
+    if (!meal) return;
 
-        editingRecipeTextMeal = meal;
-        recipeTextInput.value = meal.recipeText || "";
+    isEditingRecipeText = true;
 
-        recipeTextEditor.classList.remove("hidden");
+    const box = document.getElementById("recipeTextDisplay");
+    if (!box) return;
+
+    // Build textarea
+    const textarea = document.createElement("textarea");
+    textarea.style.width = "100%";
+    textarea.style.minHeight = "300px";
+    textarea.style.resize = "vertical";
+    textarea.value = meal.recipeText || "";
+
+    // Build buttons
+    const btnRow = document.createElement("div");
+    btnRow.style.marginTop = "8px";
+    btnRow.style.display = "flex";
+    btnRow.style.gap = "8px";
+
+    const saveBtn = document.createElement("button");
+    saveBtn.textContent = "Save";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "Cancel";
+
+    // Swap view → editor
+    box.innerHTML = "";
+    box.appendChild(textarea);
+    box.appendChild(btnRow);
+    btnRow.appendChild(saveBtn);
+    btnRow.appendChild(cancelBtn);
+
+    saveBtn.onclick = () => {
+      meal.recipeText = textarea.value.trim();
+      saveAll();
+      renderRecipeText(meal);
+      isEditingRecipeText = false;
     };
-}
-*/
-if (editRecipeTextBtn) {
-    editRecipeTextBtn.onclick = () => {
-        const title =
-            document.getElementById("recipeMealTitle").textContent;
 
-        const meal = meals.find(m => m.name === title);
-        if (!meal) return;
-
-        const existing = meal.recipeText || "";
-
-        const updated = prompt(
-            "Edit Recipe Text:",
-            existing
-        );
-
-        if (updated === null) return;
-
-        meal.recipeText = updated;
-        saveAll();
-        renderRecipeText(meal);
+    cancelBtn.onclick = () => {
+      renderRecipeText(meal);
+      isEditingRecipeText = false;
     };
+  };
 }
 
 
@@ -1561,35 +1658,67 @@ if (printRecipeBtn) {
     };
 }
 
-    const editRecipeIngredientsBtn =
-    document.getElementById("editRecipeIngredientsBtn");
+ const editRecipeIngredientsBtn =
+  document.getElementById("editRecipeIngredientsBtn");
+
+let isEditingIngredients = false;
 
 if (editRecipeIngredientsBtn) {
-    editRecipeIngredientsBtn.onclick = () => {
-        const title =
-            document.getElementById("recipeMealTitle").textContent;
+  editRecipeIngredientsBtn.onclick = () => {
+    if (isEditingIngredients) return;
 
-        const meal = meals.find(m => m.name === title);
-        if (!meal) return;
+    const title =
+      document.getElementById("recipeMealTitle").textContent;
+    const meal = meals.find(m => m.name === title);
+    if (!meal) return;
 
-        const current = (meal.ingredients || []).join("\n");
+    isEditingIngredients = true;
 
-        const updated = prompt(
-            "Edit ingredients (one per line):",
-            current
-        );
+    const list = document.getElementById("recipeIngredientList");
+    if (!list) return;
 
-        if (updated === null) return;
+    // Build textarea
+    const textarea = document.createElement("textarea");
+    textarea.style.width = "100%";
+    textarea.style.height = "200px";
+    textarea.value = (meal.ingredients || []).join("\n");
 
-        meal.ingredients = updated
-            .split("\n")
-            .map(l => l.trim())
-            .filter(Boolean);
+    // Build buttons
+    const btnRow = document.createElement("div");
+    btnRow.style.marginTop = "8px";
+    btnRow.style.display = "flex";
+    btnRow.style.gap = "8px";
 
-        saveAll();
-        renderRecipeIngredients(meal);
-        renderGroceryListPreview();
+    const saveBtn = document.createElement("button");
+    saveBtn.textContent = "Save";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "Cancel";
+
+    // Clear list and insert editor
+    list.innerHTML = "";
+    list.appendChild(textarea);
+    list.appendChild(btnRow);
+    btnRow.appendChild(saveBtn);
+    btnRow.appendChild(cancelBtn);
+
+    saveBtn.onclick = () => {
+      meal.ingredients = textarea.value
+        .split("\n")
+        .map(l => l.trim())
+        .filter(Boolean);
+
+      saveAll();
+      renderRecipeIngredients(meal);
+      renderGroceryListPreview();
+      isEditingIngredients = false;
     };
+
+    cancelBtn.onclick = () => {
+      renderRecipeIngredients(meal);
+      isEditingIngredients = false;
+    };
+  };
 }
 
     if (mealSearchInput) {
@@ -1605,29 +1734,119 @@ if (closeRecipeBtn) {
     };
 }
 
-const editRecipeNotesBtn = document.getElementById("editRecipeNotesBtn");
+const editRecipeNotesBtn =
+  document.getElementById("editRecipeNotesBtn");
+
+let isEditingNotes = false;
+
 if (editRecipeNotesBtn) {
-    editRecipeNotesBtn.onclick = () => {
-        const title = document.getElementById("recipeMealTitle").textContent;
-        const meal = meals.find(m => m.name === title);
-        if (!meal) return;
+  editRecipeNotesBtn.onclick = () => {
+    if (isEditingNotes) return;
 
-        const updated = prompt(
-            "Edit recipe notes:",
-            meal.instructions || ""
-        );
+    const title =
+      document.getElementById("recipeMealTitle").textContent;
+    const meal = meals.find(m => m.name === title);
+    if (!meal) return;
 
-        if (updated === null) return;
+    isEditingNotes = true;
 
-        meal.instructions = updated.trim();
-        saveAll();
-        renderRecipeNotes(meal);
+    const box = document.getElementById("recipeNotes");
+    if (!box) return;
+
+    // Build textarea
+    const textarea = document.createElement("textarea");
+    textarea.style.width = "100%";
+    textarea.style.minHeight = "200px";
+    textarea.value = meal.instructions || "";
+
+    // Build buttons
+    const btnRow = document.createElement("div");
+    btnRow.style.marginTop = "8px";
+    btnRow.style.display = "flex";
+    btnRow.style.gap = "8px";
+
+    const saveBtn = document.createElement("button");
+    saveBtn.textContent = "Save";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "Cancel";
+
+    // Swap view → editor
+    box.innerHTML = "";
+    box.appendChild(textarea);
+    box.appendChild(btnRow);
+    btnRow.appendChild(saveBtn);
+    btnRow.appendChild(cancelBtn);
+
+    saveBtn.onclick = () => {
+      meal.instructions = textarea.value.trim();
+      saveAll();
+      renderRecipeNotes(meal);
+      isEditingNotes = false;
     };
+
+    cancelBtn.onclick = () => {
+      renderRecipeNotes(meal);
+      isEditingNotes = false;
+    };
+  };
 }
 
     if (printGroceryBtn) {
     printGroceryBtn.onclick = () => window.print();
-}  
+} 
+
+const printSelectedGroceryBtn =
+  document.getElementById("printSelectedGroceryBtn");
+
+if (printSelectedGroceryBtn) {
+  printSelectedGroceryBtn.onclick = () => {
+    const selected =
+      document.querySelectorAll(
+        "#groceryListPreview .grocery-selected"
+      );
+
+    if (selected.length === 0) {
+      window.print();
+      return;
+    }
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    const items = Array.from(selected)
+      .map(li => `<li>${li.textContent}</li>`)
+      .join("");
+
+    printWindow.document.write(`
+      <html>
+      <head>
+        <title>Selected Grocery Items</title>
+        <style>
+          body {
+            font-family: system-ui, sans-serif;
+            padding: 24px;
+          }
+          li {
+            margin-bottom: 6px;
+            font-size: 16px;
+          }
+        </style>
+      </head>
+      <body>
+        <h2>Grocery List</h2>
+        <ul>${items}</ul>
+        <script>
+          window.onload = () => window.print();
+        </script>
+      </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+  };
+}
+
 // ================= ATTACHMENTS EXPAND / COLLAPSE =================
 
 const toggleRecipeExpandBtn =
@@ -1656,6 +1875,257 @@ renderCategories();
     renderIngredientGroups();
     renderGroceryListPreview();
      showSection(plannerSection);
+   /* =========================================================
+   CLEANUP BROKEN ATTACHMENTS — BUTTON HANDLER
+========================================================= */
+
+const cleanupBrokenAttachmentsBtn =
+  document.getElementById("cleanupBrokenAttachmentsBtn");
+
+if (cleanupBrokenAttachmentsBtn) {
+  cleanupBrokenAttachmentsBtn.onclick = async () => {
+    const title =
+      document.getElementById("recipeMealTitle").textContent;
+
+    const meal = meals.find(m => m.name === title);
+    if (!meal || !Array.isArray(meal.attachments)) {
+      alert("No attachments to clean.");
+      return;
+    }
+
+    let removed = 0;
+    const kept = [];
+
+    for (const att of meal.attachments) {
+      if (!att || !att.id) continue;
+
+      const blob = await getAttachmentBlob(att.id);
+      if (blob) {
+        kept.push(att);
+      } else {
+        removed++;
+      }
+    }
+
+    if (removed === 0) {
+      alert("No broken attachments found.");
+      return;
+    }
+
+    meal.attachments = kept;
+    saveAll();
+    renderRecipeAttachments(meal);
+
+    alert(`Removed ${removed} broken attachment(s).`);
+  };
+}
+  
+    /* =========================================================
+   ONE-TIME BROKEN ATTACHMENT CLEANUP (AUTO)
+========================================================= */
+
+(async function removeBrokenAttachmentsOnce() {
+  const done = localStorage.getItem("mp_brokenAttachmentCleanupDone");
+  if (done) return;
+
+  let removedCount = 0;
+
+  for (const meal of meals) {
+    if (!Array.isArray(meal.attachments)) continue;
+
+    const kept = [];
+
+    for (const att of meal.attachments) {
+      if (!att || !att.id) continue;
+
+      const blob = await getAttachmentBlob(att.id);
+      if (blob) {
+        kept.push(att);
+      } else {
+        removedCount++;
+      }
+    }
+
+    meal.attachments = kept;
+  }
+
+  if (removedCount > 0) {
+    saveAll();
+    console.log(
+      `Removed ${removedCount} broken attachment reference(s)`
+    );
+  }
+
+  localStorage.setItem(
+    "mp_brokenAttachmentCleanupDone",
+    "true"
+  );
+})();
+ 
+/* =========================================================
+   ONE-TIME LEGACY MEAL MIGRATION (SAFE)
+========================================================= */
+
+(function migrateLegacyMealsOnce() {
+    const alreadyMigrated =
+        localStorage.getItem("mp_legacyMigrationDone");
+
+    if (alreadyMigrated) return;
+
+    const legacyRaw =
+        localStorage.getItem("mealPlanner_meals");
+
+    if (!legacyRaw) {
+        localStorage.setItem("mp_legacyMigrationDone", "true");
+        return;
+    }
+
+    let legacyMeals;
+    try {
+        legacyMeals = JSON.parse(legacyRaw);
+    } catch {
+        console.warn("Legacy meals unreadable");
+        localStorage.setItem("mp_legacyMigrationDone", "true");
+        return;
+    }
+
+    if (!Array.isArray(legacyMeals) || legacyMeals.length === 0) {
+        localStorage.setItem("mp_legacyMigrationDone", "true");
+        return;
+    }
+
+    const existingNames =
+        new Set(meals.map(m => m.name.toLowerCase()));
+
+    let importedCount = 0;
+
+    legacyMeals.forEach(old => {
+        if (!old.name) return;
+
+        const nameKey = old.name.toLowerCase();
+        if (existingNames.has(nameKey)) return;
+
+        meals.push({
+            id: crypto.randomUUID(),
+            name: old.name,
+            instructions: old.instructions || "",
+            ingredients: Array.isArray(old.ingredients)
+                ? old.ingredients
+                : [],
+            categoryIds: old.category
+                ? [old.category]
+                : [],
+            rating: "",
+            attachments: []
+        });
+
+        importedCount++;
+    });
+
+    if (importedCount > 0) {
+        saveAll();
+        console.log(
+            `Legacy migration complete: ${importedCount} meals imported`
+        );
+    }
+
+    localStorage.setItem("mp_legacyMigrationDone", "true");
+})();
+/* =========================================================
+   ONE-TIME LEGACY STORAGE ARCHIVE
+========================================================= */
+
+(function archiveLegacyStorageOnce() {
+    const done = localStorage.getItem("mp_legacyArchiveDone");
+    if (done) return;
+
+    const legacyKeys = Object.keys(localStorage)
+        .filter(k => k.startsWith("mealPlanner_"));
+
+    if (legacyKeys.length === 0) {
+        localStorage.setItem("mp_legacyArchiveDone", "true");
+        return;
+    }
+
+    const archive = {};
+
+    legacyKeys.forEach(key => {
+        archive[key] = localStorage.getItem(key);
+    });
+
+    localStorage.setItem(
+        "mp_legacyArchive",
+        JSON.stringify(archive, null, 2)
+    );
+
+    legacyKeys.forEach(key => localStorage.removeItem(key));
+
+    localStorage.setItem("mp_legacyArchiveDone", "true");
+
+    console.log(
+        `Archived and removed ${legacyKeys.length} legacy keys`
+    );
+})();
+/* =========================================================
+   ONE-TIME INLINE ATTACHMENT MIGRATION
+========================================================= */
+
+(async function migrateInlineAttachmentsOnce() {
+    const done = localStorage.getItem("mp_inlineAttachmentMigrationDone");
+    if (done) return;
+
+    let migratedCount = 0;
+
+    for (const meal of meals) {
+        if (!Array.isArray(meal.attachments)) continue;
+
+        for (let i = 0; i < meal.attachments.length; i++) {
+            const att = meal.attachments[i];
+
+            // Skip already-correct attachments
+            if (att.id && !att.data) continue;
+
+            // Only migrate inline base64 attachments
+            if (!att.data || !att.type) continue;
+
+            try {
+                const byteString = atob(att.data.split(",")[1]);
+                const ab = new ArrayBuffer(byteString.length);
+                const ia = new Uint8Array(ab);
+
+                for (let j = 0; j < byteString.length; j++) {
+                    ia[j] = byteString.charCodeAt(j);
+                }
+
+                const blob = new Blob([ab], { type: att.type });
+                const newId = crypto.randomUUID();
+
+                await storeAttachmentBlob(newId, blob);
+
+                // Replace inline attachment with indexed version
+                meal.attachments[i] = {
+                    id: newId,
+                    name: att.name || "Attachment",
+                    type: att.type
+                };
+
+                migratedCount++;
+            } catch (err) {
+                console.error("Attachment migration failed:", err);
+            }
+        }
+    }
+
+    if (migratedCount > 0) {
+        saveAll();
+        console.log(`Migrated ${migratedCount} inline attachments`);
+    }
+
+    localStorage.setItem(
+        "mp_inlineAttachmentMigrationDone",
+        "true"
+    );
+})();
 
 });
 
